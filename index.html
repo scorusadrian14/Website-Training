@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ro">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Departament de Pregătire</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <!-- Navbar -->
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">Departament de Pregătire</a>
+
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse justify-content-center" id="navbarCollapse">
+        <ul class="navbar-nav mx-auto">
+          <li class="nav-item"><a class="nav-link active" href="#">Acasă</a></li>
+          <li class="nav-item"><a class="nav-link" href="#">Cursuri</a></li>
+          <li class="nav-item"><a class="nav-link" href="#">Despre</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+
+  <!-- Sidebar -->
+  <div class="sidebar bg-dark text-white">
+    <h5>Secțiuni utile</h5>
+    <ul class="nav flex-column">
+      <li class="nav-item"><a class="nav-link" href="#">📅 Calendarul Cursurilor</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">🧑‍🏫 Instructori</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">📚 Materiale</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">📝 Înscriere</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">📞 Contact</a></li>
+    </ul>
+  </div>
+
+  <!-- Conținut principal -->
+  <main class="content">
+
+    <!-- Carousel -->
+    <div id="mainCarousel" class="carousel slide" data-bs-ride="carousel">
+      <div class="carousel-indicators">
+        <button type="button" data-bs-target="#mainCarousel" data-bs-slide-to="0" class="active"></button>
+        <button type="button" data-bs-target="#mainCarousel" data-bs-slide-to="1"></button>
+        <button type="button" data-bs-target="#mainCarousel" data-bs-slide-to="2"></button>
+      </div>
+      <div class="carousel-inner">
+        <div class="carousel-item active">
+          <img src="/Website-Training/assets/CNE_Cernavoda.jpg" class="d-block w-100" alt="Slide 1">
+          <div class="carousel-caption d-none d-md-block bg-dark bg-opacity-50 p-3 rounded">
+            <h5>Cursuri Specializate</h5>
+            <p>Programe adaptate pentru fiecare domeniu.</p>
+          </div>
+          <a href="https://exemplu.com/detalii-cursuri" class="btn btn-primary vezi-mai-mult-btn">Vezi mai mult></a>
+        </div>
+        <div class="carousel-item">
+          <img src="https://via.placeholder.com/1200x500?text=Workshop-uri+Interactive" class="d-block w-100"
+            alt="Slide 2">
+          <div class="carousel-caption d-none d-md-block bg-dark bg-opacity-50 p-3 rounded">
+            <h5>Workshop-uri Interactive</h5>
+            <p>Învățare aplicată cu studii de caz reale.</p>
+          </div>
+        </div>
+        <div class="carousel-item">
+          <img src="https://via.placeholder.com/1200x500?text=Certificări+Recunoscute" class="d-block w-100"
+            alt="Slide 3">
+          <div class="carousel-caption d-none d-md-block bg-dark bg-opacity-50 p-3 rounded">
+            <h5>Certificări Recunoscute</h5>
+            <p>Diplome cu recunoaștere internațională.</p>
+          </div>
+        </div>
+      </div>
+      <button class="carousel-control-prev" type="button" data-bs-target="#mainCarousel" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon"></span>
+      </button>
+      <button class="carousel-control-next" type="button" data-bs-target="#mainCarousel" data-bs-slide="next">
+        <span class="carousel-control-next-icon"></span>
+      </button>
+    </div>
+
+    <!-- 3 coloane promoționale -->
+    <div class="container marketing mt-5">
+      <div class="row">
+        <div class="col-lg-4 text-center">
+          <img src="/Website-Training/assets/Profile_picture.jpg" class="bd-placeholder-img rounded-circle" width="140"
+            height="140" alt="">
+          <h2>Angajatul lunii</h2>
+          <p>Formatori cu experiență vastă în domeniu.</p>
+          <button class="btn btn-outline-primary" onclick="openModal('modalAngajat')">Vezi mai mult</button>
+        </div>
+        <div class="col-lg-4 text-center">
+          <img src="https://via.placeholder.com/140" class="bd-placeholder-img rounded-circle" width="140" height="140"
+            alt="">
+          <h2>Curriculum Modern</h2>
+          <p>Conținut actualizat conform standardelor actuale.</p>
+          <button class="btn btn-outline-primary" onclick="openModal('modalCurriculum')">Vezi mai mult</button>
+        </div>
+        <div class="col-lg-4 text-center">
+          <img src="https://via.placeholder.com/140" class="bd-placeholder-img rounded-circle" width="140" height="140"
+            alt="">
+          <h2>Suport Permanent</h2>
+          <p>Asistență și resurse pentru fiecare participant.</p>
+          <button class="btn btn-outline-primary" onclick="openModal('modalSuport')">Vezi mai mult</button>
+        </div>
+      </div>
+
+
+      <!-- Featurettes -->
+      <hr class="featurette-divider">
+      <div class="row featurette">
+        <div class="col-md-7">
+          <h2 class="featurette-heading">Pregătire personalizată. <span class="text-muted">Pentru fiecare nivel.</span>
+          </h2>
+          <p class="lead">Adaptăm conținutul în funcție de nivelul și obiectivele cursanților.</p>
+        </div>
+        <div class="col-md-5">
+          <img src="https://via.placeholder.com/500x500" class="img-fluid" alt="">
+        </div>
+      </div>
+
+      <hr class="featurette-divider">
+      <div class="row featurette">
+        <div class="col-md-7 order-md-2">
+          <h2 class="featurette-heading">Acces online complet. <span class="text-muted">Oriunde, oricând.</span></h2>
+          <p class="lead">Platforma noastră este disponibilă 24/7 pentru toți participanții.</p>
+        </div>
+        <div class="col-md-5 order-md-1">
+          <img src="https://via.placeholder.com/500x500" class="img-fluid" alt="">
+        </div>
+      </div>
+
+      <hr class="featurette-divider">
+      <div class="row featurette">
+        <div class="col-md-7">
+          <h2 class="featurette-heading">Evaluare continuă. <span class="text-muted">Cu feedback constant.</span></h2>
+          <p class="lead">Monitorizăm progresul și oferim recomandări personalizate.</p>
+        </div>
+        <div class="col-md-5">
+          <img src="https://via.placeholder.com/500x500" class="img-fluid" alt="">
+        </div>
+      </div>
+
+      <hr class="featurette-divider">
+    </div>
+
+    <!-- Footer -->
+    <footer class="container">
+      <p class="float-end"><a href="#">Înapoi sus</a></p>
+      <p>&copy; 2025 Departament de Pregătire &middot; <a href="#">Confidențialitate</a> &middot; <a
+          href="#">Termeni</a></p>
+    </footer>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="script.js"></script>
+
+<!--Modale-->
+<!-- Modal Angajatul lunii -->
+<div id="modalAngajat" class="custom-modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal('modalAngajat')">&times;</span>
+    <h5>Angajatul lunii</h5>
+    <p>Recunoaștem lunar performanțele trainerilor noștri. Angajatul lunii este selectat în funcție de feedback-ul cursanților, inovație în livrarea cursurilor și implicare activă.</p>
+  </div>
+</div>
+
+<!-- Modal Curriculum -->
+<div id="modalCurriculum" class="custom-modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal('modalCurriculum')">&times;</span>
+    <h5>Curriculum Modern</h5>
+    <p>Curriculum-ul nostru este în continuă actualizare, conform celor mai noi standarde educaționale și cerințelor pieței muncii. Include module interactive, simulări și aplicații practice.</p>
+  </div>
+</div>
+
+<!-- Modal Suport -->
+<div id="modalSuport" class="custom-modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal('modalSuport')">&times;</span>
+    <h5>Suport Permanent</h5>
+    <p>Participanții beneficiază de suport tehnic și pedagogic pe toată durata cursurilor. Echipa noastră este disponibilă prin email, chat și întâlniri individuale programate.</p>
+  </div>
+</div>
+</body>
+
+</html>
