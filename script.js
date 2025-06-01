@@ -1,112 +1,220 @@
+// --- Funcții pentru modale ---
 function openModal(id) {
-  document.getElementById(id).style.display = "block";
+  const modal = document.getElementById(id);
+  if (modal) modal.style.display = "block";
 }
 
 function closeModal(id) {
-  document.getElementById(id).style.display = "none";
+  const modal = document.getElementById(id);
+  if (modal) modal.style.display = "none";
 }
 
-window.onclick = function(event) {
+window.onclick = function (event) {
   const modals = document.querySelectorAll(".custom-modal");
   modals.forEach(modal => {
-    if (event.target == modal) {
+    if (event.target === modal) {
       modal.style.display = "none";
     }
   });
+};
+
+// --- Sidebar: toggle submenu + închidere la click în afară ---
+function toggleSubmenu(event) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const link = event.currentTarget;
+  const submenu = link.nextElementSibling;
+  const icon = link.querySelector('.submenu-icon');
+
+  // Închide celelalte
+  document.querySelectorAll('.submenu-right').forEach(el => el.classList.remove('show'));
+
+
+  const isOpen = submenu.classList.contains('show');
+
+  if (!isOpen) {
+    // Poziționare fixă, dar bazată pe click
+    const rect = link.getBoundingClientRect();
+    submenu.style.top = `${rect.top}px`;          // aliniere verticală cu linkul
+    submenu.style.left = `${rect.right + 15}px`;        // plasare în dreapta
+
+    submenu.classList.add('show');
+  }
 }
 
-function includeHTML() {
-  const elements = document.querySelectorAll('[include-html]');
-  elements.forEach(el => {
-    const file = el.getAttribute('include-html');
-    fetch(file)
+
+document.addEventListener('click', () => {
+  document.querySelectorAll('.submenu-right').forEach(el => el.classList.remove('show'));
+  document.querySelectorAll('.submenu-icon').forEach(el => el.classList.remove('rotate'));
+});
+
+// --- Generare meniu lunar dinamic ---
+async function genereazaMeniuLunar() {
+  const year = new Date().getFullYear();
+  const luni = [
+    "Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie",
+    "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"
+  ];
+
+  const container = document.getElementById("meniu-luni");
+  if (!container) return;
+
+  for (let i = 0; i < 12; i++) {
+    const filePath = `program_lunar/${year}/program_lunar_${i + 1}.pdf`;
+
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.className = "nav-link";
+    a.textContent = luni[i];
+
+    try {
+      const response = await fetch(filePath, { method: "HEAD" });
+      if (response.ok) {
+        a.href = filePath;
+        a.target = "_blank";
+      }
+    } catch (err) {
+      // Fără link dacă fișierul nu există
+    }
+
+    li.appendChild(a);
+    container.appendChild(li);
+  }
+}
+//Genereaza oferta cursuri
+
+function genereazaOfertaCursuri() {
+  const year = 2025; // sau: new Date().getFullYear();
+  const luni = [
+    "Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie",
+    "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"
+  ];
+
+  const container = document.getElementById("meniu-oferta-cursuri");
+  if (!container) return;
+
+  // Link static: Oferta anuală
+  const liAnual = document.createElement("li");
+  const aAnual = document.createElement("a");
+  aAnual.className = "nav-link";
+  aAnual.textContent = "📄 Oferta anuală";
+  aAnual.href = `oferta_cursuri/${year}/oferta_anuala.pdf`;
+  aAnual.target = "_blank";
+  liAnual.appendChild(aAnual);
+  container.appendChild(liAnual);
+
+  // Linkuri lunare dinamice
+  luni.forEach((luna, i) => {
+    const filePath = `oferta_cursuri/${year}/oferta_cursuri_${i + 1}.pdf`;
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.className = "nav-link";
+    a.textContent = luna;
+
+    // Verifică dacă fișierul există
+    fetch(filePath, { method: "HEAD" })
       .then(response => {
-        if (response.ok) return response.text();
-        throw new Error(`Could not load ${file}`);
+        if (response.ok) {
+          a.href = filePath;
+          a.target = "_blank";
+        }
       })
-      .then(data => {
-        el.innerHTML = data;
-        el.removeAttribute('include-html');
-        includeHTML(); // Recursiv, dacă în interior există și alte includeri
-      })
-      .catch(err => console.error(err));
+      .catch(() => {
+        // fișierul nu există — linkul rămâne inactiv
+      });
+
+    li.appendChild(a);
+    container.appendChild(li);
   });
 }
 
-// ✅ Listă de fișiere PDF care există pe server
-const existingPDFs = [
-  "program-2025-s01.pdf",
-  "program-2025-s02.pdf",
-  "program-2025-s03.pdf",
-  "program-2025-s04.pdf",
-  "program-2025-s05.pdf"
-];
 
-function generateProgramRows() {
-  const tbody = document.getElementById("program-tbody");
+// --- Generare tabel activități pe săptămâni ---
+function getWorkWeekRange(year, week) {
+  const firstDay = new Date(year, 0, 1 + (week - 1) * 7);
+  const day = firstDay.getDay();
+  const mondayOffset = day <= 4 ? 1 - day : 8 - day;
+  const monday = new Date(firstDay.setDate(firstDay.getDate() + mondayOffset));
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+
+  const formatDate = d =>
+    `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+
+  return `${formatDate(monday)}-${formatDate(friday)}`;
+}
+
+async function genereazaTabelActivitati() {
+  const tbody = document.getElementById("tabel-saptamani");
   if (!tbody) return;
 
   const year = new Date().getFullYear();
-  const weeks = getWeeksInYear(year);
+  const totalSaptamani = (() => {
+    const lastDay = new Date(year, 11, 31);
+    const week = Math.ceil((((lastDay - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
+    return week;
+  })();
 
-  for (let week = 1; week <= weeks; week++) {
-    const startDate = getDateOfISOWeek(week, year);
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 4); // luni–vineri
-
-    const label = formatDate(startDate) + "–" + formatDate(endDate) + "." + year;
-    const fileName = `program-${year}-s${String(week).padStart(2, '0')}.pdf`;
-    const filePath = `/pdf-uri/${fileName}`;
+  for (let sapt = 1; sapt <= totalSaptamani; sapt++) {
+    const perioada = getWorkWeekRange(year, sapt);
+    const filePath = `activitati_simulator/${year}/activitati_simulator_${sapt}.pdf`;
 
     const tr = document.createElement("tr");
-    const tdWeek = document.createElement("td");
-    tdWeek.textContent = week;
+    const tdSapt = document.createElement("td");
+    tdSapt.textContent = `S${sapt}`;
+    const tdProg = document.createElement("td");
 
-    const tdProgram = document.createElement("td");
-
-    if (existingPDFs.includes(fileName)) {
-      const a = document.createElement("a");
-      a.href = filePath;
-      a.target = "_blank";
-      a.textContent = label;
-      tdProgram.appendChild(a);
-    } else {
-      tdProgram.textContent = label;
+    try {
+      const response = await fetch(filePath, { method: "HEAD" });
+      if (response.ok) {
+        const a = document.createElement("a");
+        a.href = filePath;
+        a.textContent = perioada;
+        a.target = "_blank";
+        tdProg.appendChild(a);
+      } else {
+        tdProg.textContent = perioada;
+      }
+    } catch {
+      tdProg.textContent = perioada;
     }
 
-    tr.appendChild(tdWeek);
-    tr.appendChild(tdProgram);
+    tr.appendChild(tdSapt);
+    tr.appendChild(tdProg);
     tbody.appendChild(tr);
   }
 }
 
-function formatDate(date) {
-  return `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}`;
+// --- Include HTML dinamic pentru navbar/sidebar ---
+async function includeHTML(id, url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Nu s-a putut încărca ${url}`);
+    const html = await response.text();
+
+    document.getElementById(id).innerHTML = html;
+
+    // Inițializează meniul lunar după ce sidebar-ul e încărcat
+    if (id === "sidebar-placeholder") {
+      genereazaMeniuLunar();
+      genereazaOfertaCursuri();
+    }
+  } catch (err) {
+    console.error(err);
+  }
+
+
 }
 
-function getWeeksInYear(year) {
-  const d = new Date(year, 11, 31);
-  const day = d.getDay();
-  return (day === 4 || (isLeapYear(year) && day === 3)) ? 53 : 52;
-}
+// --- Inițializare generală ---
+window.addEventListener('DOMContentLoaded', () => {
+  // Încarcă componentele reutilizabile
+  includeHTML("navbar-placeholder", "navbar.html");
+  includeHTML("sidebar-placeholder", "sidebar.html");
 
-function isLeapYear(year) {
-  return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
-}
 
-function getDateOfISOWeek(week, year) {
-  const simple = new Date(year, 0, 1 + (week - 1) * 7);
-  const dow = simple.getDay();
-  const ISOweekStart = simple;
-  if (dow <= 4)
-    ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
-  else
-    ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
-  return ISOweekStart;
-}
 
-// ✅ Rulează la încărcarea paginii
-document.addEventListener("DOMContentLoaded", generateProgramRows);
-// ✅ Include HTML din fișiere externe
-
-window.addEventListener('DOMContentLoaded', includeHTML);
+  // Generează tabel dacă există pe pagină
+  genereazaTabelActivitati();
+});
