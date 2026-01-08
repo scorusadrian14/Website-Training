@@ -1,0 +1,200 @@
+# ===================== USER SETTINGS =====================
+$pptxPath = "D:\AScorus\Moodle-Cursuri\AB004\AB-004.pptx"
+$outDir   = "D:\AScorus\Screenshots"
+$delayMs  = 700          # render delay per slide before capture
+$startupWaitMs = 1500    # wait for slideshow windows to appear
+# =========================================================
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$msoTrue  = -1
+$msoFalse = 0
+
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+
+# Win32: enumerate windows, get rect/title/class, focus
+Add-Type -TypeDefinition @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+
+public static class Win32 {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError=true)]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+    [DllImport("user32.dll", SetLastError=true)]
+    public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
+"@
+
+function Capture-RectToPng {
+    param(
+        [int]$left,
+        [int]$top,
+        [int]$width,
+        [int]$height,
+        [string]$file
+    )
+
+    if ($width -le 0 -or $height -le 0) {
+        throw "Invalid capture size: ${width}x${height}"
+    }
+
+    $bmp = New-Object System.Drawing.Bitmap $width, $height
+    $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+    try {
+        $gfx.CopyFromScreen($left, $top, 0, 0, $bmp.Size)
+        $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally {
+        $gfx.Dispose()
+        $bmp.Dispose()
+    }
+}
+
+function Get-LargestPowerPointTopWindowHandle {
+    param(
+        [uint32]$powerpntPid,
+        [int]$minArea = 200000  # ignore tiny windows
+    )
+
+    # script-scoped vars the callback can update
+    $script:bestHwnd = [IntPtr]::Zero
+    $script:bestArea = 0
+    $script:bestRect = $null
+
+    $callback = [Win32+EnumWindowsProc]{
+        param([IntPtr]$hWnd, [IntPtr]$lParam)
+
+        if (-not [Win32]::IsWindowVisible($hWnd)) { return $true }
+
+        $winPid = [uint32]0
+        [Win32]::GetWindowThreadProcessId($hWnd, [ref]$winPid) | Out-Null
+        if ($winPid -ne $powerpntPid) { return $true }
+
+        $rect = New-Object Win32+RECT
+        if (-not [Win32]::GetWindowRect($hWnd, [ref]$rect)) { return $true }
+
+        $w = $rect.Right - $rect.Left
+        $h = $rect.Bottom - $rect.Top
+        $area = $w * $h
+        if ($area -lt $minArea) { return $true }
+
+        # Exclude the normal PowerPoint editor window
+        $cls = New-Object System.Text.StringBuilder 256
+        [Win32]::GetClassName($hWnd, $cls, $cls.Capacity) | Out-Null
+        $className = $cls.ToString()
+        if ($className -eq "PPTFrameClass") { return $true }
+
+        if ($area -gt $script:bestArea) {
+            $script:bestHwnd = $hWnd
+            $script:bestArea = $area
+            $script:bestRect = $rect
+        }
+
+        return $true
+    }
+
+    [Win32]::EnumWindows($callback, [IntPtr]::Zero) | Out-Null
+
+    return @{ Hwnd = $script:bestHwnd; Rect = $script:bestRect; Area = $script:bestArea }
+}
+
+# --- Validate / prepare ---
+if (-not (Test-Path -LiteralPath $pptxPath)) { throw "File not found: $pptxPath" }
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+$ppt  = $null
+$pres = $null
+$ssw  = $null
+
+try {
+    # Start PowerPoint
+    $ppt = New-Object -ComObject PowerPoint.Application
+    $ppt.Visible = $msoTrue
+
+    # Open presentation
+    $pres = $ppt.Presentations.Open($pptxPath, $msoTrue, $msoFalse, $msoTrue)
+
+    # Start slideshow
+    $settings = $pres.SlideShowSettings
+    $settings.StartingSlide = 1
+    $settings.EndingSlide   = $pres.Slides.Count
+    $settings.Run() | Out-Null
+
+    Start-Sleep -Milliseconds $startupWaitMs
+
+    # For navigation (Next)
+    $ssw = $ppt.SlideShowWindows.Item(1)
+
+    # Choose the newest POWERPNT process (usually the one we started)
+    $pp = Get-Process POWERPNT -ErrorAction Stop | Sort-Object StartTime -Descending | Select-Object -First 1
+    $ppPid = [uint32]$pp.Id
+
+    $total = $pres.Slides.Count
+
+    for ($i = 1; $i -le $total; $i++) {
+        Start-Sleep -Milliseconds $delayMs
+
+        $win = Get-LargestPowerPointTopWindowHandle -powerpntPid $ppPid
+
+        if ($win.Hwnd -eq [IntPtr]::Zero -or $null -eq $win.Rect) {
+            throw "Could not locate a slideshow window for POWERPNT (pid $ppPid). If Presenter View is enabled, disable it and retry."
+        }
+
+        # Focus
+        [Win32]::ShowWindow($win.Hwnd, 9) | Out-Null   # SW_RESTORE
+        [Win32]::SetForegroundWindow($win.Hwnd) | Out-Null
+        Start-Sleep -Milliseconds 150
+
+        $r = $win.Rect
+        $w = $r.Right - $r.Left
+        $h = $r.Bottom - $r.Top
+
+        $file = Join-Path $outDir ("slide {0}.png" -f $i)
+        Capture-RectToPng -left $r.Left -top $r.Top -width $w -height $h -file $file
+
+        if ($i -lt $total) {
+            $ssw.View.Next()
+        }
+    }
+
+    $ssw.View.Exit()
+    "Done. Saved $total screenshots to: $outDir"
+}
+finally {
+    try { if ($pres -ne $null) { $pres.Close() | Out-Null } } catch {}
+    try { if ($ppt  -ne $null) { $ppt.Quit()  | Out-Null } } catch {}
+
+    try { if ($ssw  -ne $null) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($ssw) } } catch {}
+    try { if ($pres -ne $null) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($pres) } } catch {}
+    try { if ($ppt  -ne $null) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($ppt) } } catch {}
+
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+}
