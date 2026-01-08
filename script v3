@@ -1,0 +1,105 @@
+# ===================== USER SETTINGS =====================
+# Full path to the PPT/PPTX
+$pptxPath = "D:\AScorus\Moodle-Cursuri\AB004\AB-004.pptx"
+
+# Folder where screenshots will be saved
+$outDir   = "D:\AScorus\Screenshots"
+
+# Delay (ms) to allow each slide to render before capture
+$delayMs  = 700
+# =========================================================
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+# Office MsoTriState values
+$msoTrue  = -1
+$msoFalse = 0
+
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+
+function Capture-Region {
+    param(
+        [int]$left,
+        [int]$top,
+        [int]$width,
+        [int]$height,
+        [string]$file
+    )
+
+    if ($width -le 0 -or $height -le 0) {
+        throw "Invalid capture size: ${width}x${height}"
+    }
+
+    $bmp = New-Object System.Drawing.Bitmap $width, $height
+    $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+    try {
+        $gfx.CopyFromScreen($left, $top, 0, 0, $bmp.Size)
+        $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally {
+        $gfx.Dispose()
+        $bmp.Dispose()
+    }
+}
+
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+$ppt  = $null
+$pres = $null
+$ssw  = $null
+
+try {
+    # Start PowerPoint
+    $ppt = New-Object -ComObject PowerPoint.Application
+    $ppt.Visible = $msoTrue
+
+    # Open presentation: Open(FileName, ReadOnly, Untitled, WithWindow)
+    $pres = $ppt.Presentations.Open($pptxPath, $msoTrue, $msoFalse, $msoTrue)
+
+    # Start full-screen slideshow
+    $settings = $pres.SlideShowSettings
+    $settings.StartingSlide = 1
+    $settings.EndingSlide   = $pres.Slides.Count
+
+    $settings.Run() | Out-Null
+
+    # Give slideshow time to enter full-screen
+    Start-Sleep -Milliseconds 800
+
+    # Get slideshow window
+    $ssw = $ppt.SlideShowWindows.Item(1)
+
+    $total = $pres.Slides.Count
+
+    for ($i = 1; $i -le $total; $i++) {
+        Start-Sleep -Milliseconds $delayMs
+
+        $file = Join-Path $outDir ("slide {0}.png" -f $i)
+
+        # Capture the slideshow window region using its coordinates
+        Capture-Region ([int]$ssw.Left) ([int]$ssw.Top) ([int]$ssw.Width) ([int]$ssw.Height) $file
+
+        if ($i -lt $total) {
+            $ssw.View.Next()
+        }
+    }
+
+    $ssw.View.Exit()
+}
+finally {
+    # Clean up
+    try { if ($pres -ne $null) { $pres.Close() | Out-Null } } catch {}
+    try { if ($ppt  -ne $null) { $ppt.Quit()  | Out-Null } } catch {}
+
+    # Release COM objects
+    try { if ($ssw  -ne $null) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($ssw) } } catch {}
+    try { if ($pres -ne $null) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($pres) } } catch {}
+    try { if ($ppt  -ne $null) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($ppt) } } catch {}
+
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+}
+
+"Done. Saved screenshots to: $outDir"
