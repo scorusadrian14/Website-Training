@@ -1,0 +1,80 @@
+# ========= USER SETTINGS =========
+$pptxPath = "D:\AScorus\Moodle-Cursuri\AB004\AB-004.pptx"
+$outDir   = "D:\AScorus\Screenshots"
+$delayMs  = 700
+# ================================
+
+$msoTrue  = -1
+$msoFalse = 0
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+
+# Win32 API for window rectangle
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class Win32 {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+}
+"@
+
+function Capture-Window {
+    param ($hwnd, $file)
+
+    $rect = New-Object Win32+RECT
+    [Win32]::GetWindowRect($hwnd, [ref]$rect) | Out-Null
+
+    $width  = $rect.Right - $rect.Left
+    $height = $rect.Bottom - $rect.Top
+
+    $bmp = New-Object System.Drawing.Bitmap $width, $height
+    $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+    $gfx.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bmp.Size)
+
+    $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
+
+    $gfx.Dispose()
+    $bmp.Dispose()
+}
+
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+$ppt = New-Object -ComObject PowerPoint.Application
+$ppt.Visible = $msoTrue
+
+$pres = $ppt.Presentations.Open($pptxPath, $msoTrue, $msoFalse, $msoTrue)
+
+$settings = $pres.SlideShowSettings
+$settings.StartingSlide = 1
+$settings.EndingSlide   = $pres.Slides.Count
+
+$settings.Run()
+Start-Sleep -Milliseconds 800
+
+$ssw = $ppt.SlideShowWindows.Item(1)
+
+for ($i = 1; $i -le $pres.Slides.Count; $i++) {
+    Start-Sleep -Milliseconds $delayMs
+    Capture-Window $ssw.HWND (Join-Path $outDir "slide $i.png")
+    if ($i -lt $pres.Slides.Count) {
+        $ssw.View.Next()
+    }
+}
+
+$ssw.View.Exit()
+$pres.Close()
+$ppt.Quit()
