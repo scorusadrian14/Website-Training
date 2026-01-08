@@ -1,0 +1,1 @@
+powershell -ExecutionPolicy Bypass -File "C:\Path\Capture-Ppt-SlideshowScreens.ps1" -PptxPath "C:\Path\Deck.pptx" -OutDir "C:\Path\Shots"
