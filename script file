@@ -1,0 +1,150 @@
+param(
+  [Parameter(Mandatory=$true)]
+  [string]$PptxPath,
+
+  [string]$OutDir = (Join-Path $PWD "ppt_screens"),
+
+  # Delay after each slide is shown before capturing (seconds).
+  # Increase if you get partial/blank frames on heavy slides.
+  [double]$RenderDelaySeconds = 0.5,
+
+  # If your slideshow is on multiple monitors or you see cropping, keep this $true.
+  # If you want "exactly what is on the screen across all monitors", set to $false and use VirtualScreen capture.
+  [bool]$CaptureSlideshowWindowOnly = $true
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+# ---- Constants for Office MsoTriState ----
+$msoTrue  = -1
+$msoFalse = 0
+
+# ---- Win32 for window rectangle ----
+Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+
+public static class NativeMethods {
+  [DllImport("user32.dll")]
+  public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+}
+"@
+
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+
+function Save-PngFromScreenRegion {
+  param(
+    [int]$Left,
+    [int]$Top,
+    [int]$Width,
+    [int]$Height,
+    [string]$OutFile
+  )
+
+  if ($Width -le 0 -or $Height -le 0) {
+    throw "Invalid capture size: ${Width}x${Height}"
+  }
+
+  $bmp = New-Object System.Drawing.Bitmap $Width, $Height
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  try {
+    $g.CopyFromScreen($Left, $Top, 0, 0, (New-Object System.Drawing.Size($Width, $Height)))
+    $bmp.Save($OutFile, [System.Drawing.Imaging.ImageFormat]::Png)
+  }
+  finally {
+    $g.Dispose()
+    $bmp.Dispose()
+  }
+}
+
+# ---- Validate inputs ----
+if (-not (Test-Path -LiteralPath $PptxPath)) {
+  throw "File not found: $PptxPath"
+}
+
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+
+$ppt = $null
+$pres = $null
+$ssw = $null
+
+try {
+  # Start PowerPoint
+  $ppt = New-Object -ComObject PowerPoint.Application
+  if ($null -eq $ppt) { throw "Failed to create PowerPoint.Application COM object. Is PowerPoint installed?" }
+  $ppt.Visible = $msoTrue
+
+  # Open presentation: Open(FileName, ReadOnly, Untitled, WithWindow)
+  $pres = $ppt.Presentations.Open($PptxPath, $msoTrue, $msoFalse, $msoTrue)
+  if ($null -eq $pres) { throw "Failed to open presentation (Presentations.Open returned null)." }
+
+  $total = $pres.Slides.Count
+  if ($total -lt 1) { throw "Presentation contains no slides." }
+
+  # Start slideshow
+  $settings = $pres.SlideShowSettings
+  $settings.StartingSlide = 1
+  $settings.EndingSlide   = $total
+
+  $ssw = $settings.Run()
+
+  # Sometimes Run() returns null even though slideshow starts; fetch from SlideShowWindows
+  if ($null -eq $ssw) {
+    Start-Sleep -Milliseconds 500
+    if ($ppt.SlideShowWindows.Count -ge 1) {
+      $ssw = $ppt.SlideShowWindows.Item(1)
+    }
+  }
+  if ($null -eq $ssw) { throw "Slide show did not start (no SlideShowWindow available)." }
+
+  # Give it time to enter full-screen
+  Start-Sleep -Milliseconds 700
+
+  for ($i = 1; $i -le $total; $i++) {
+    if ($RenderDelaySeconds -gt 0) {
+      Start-Sleep -Milliseconds ([int]($RenderDelaySeconds * 1000))
+    }
+
+    $outFile = Join-Path $OutDir ("slide_{0:000}.png" -f $i)
+
+    if ($CaptureSlideshowWindowOnly) {
+      $hwnd = [IntPtr]$ssw.HWND
+      $rect = New-Object Win32.RECT
+      $ok = [Win32.NativeMethods]::GetWindowRect($hwnd, [ref]$rect)
+      if (-not $ok) { throw "GetWindowRect failed for slideshow window." }
+
+      $w = $rect.Right - $rect.Left
+      $h = $rect.Bottom - $rect.Top
+
+      Save-PngFromScreenRegion -Left $rect.Left -Top $rect.Top -Width $w -Height $h -OutFile $outFile
+    }
+    else {
+      # Capture entire virtual desktop (all monitors)
+      $vs = [System.Windows.Forms.SystemInformation]::VirtualScreen
+      Save-PngFromScreenRegion -Left $vs.Left -Top $vs.Top -Width $vs.Width -Height $vs.Height -OutFile $outFile
+    }
+
+    # Advance unless last slide
+    if ($i -lt $total) {
+      $ssw.View.Next()
+    }
+  }
+
+  # Exit slideshow
+  $ssw.View.Exit()
+
+  "Done. Saved $total screenshots to: $OutDir"
+}
+finally {
+  # Close presentation and quit PowerPoint
+  try { if ($ssw  -ne $null) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($ssw) } } catch {}
+  try { if ($pres -ne $null) { $pres.Close() | Out-Null; [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($pres) } } catch {}
+  try { if ($ppt  -ne $null) { $ppt.Quit()  | Out-Null; [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($ppt) } } catch {}
+
+  [GC]::Collect()
+  [GC]::WaitForPendingFinalizers()
+}
