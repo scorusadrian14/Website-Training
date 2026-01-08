@@ -1,0 +1,142 @@
+# ===================== USER SETTINGS =====================
+$pptxPath = "D:\AScorus\Moodle-Cursuri\AB004\AB-004.pptx"
+$outDir   = "D:\AScorus\Screenshots"
+$delayMs  = 700          # render delay per slide
+$focusRetryMs = 1500     # how long to keep trying to focus slideshow at start
+# =========================================================
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$msoTrue  = -1
+$msoFalse = 0
+
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+
+# Win32 helpers: FindWindow + SetForegroundWindow + ShowWindow
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class Win32 {
+    [DllImport("user32.dll", SetLastError=true)]
+    public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
+"@
+
+function Capture-Region {
+    param(
+        [int]$left,
+        [int]$top,
+        [int]$width,
+        [int]$height,
+        [string]$file
+    )
+
+    if ($width -le 0 -or $height -le 0) {
+        throw "Invalid capture size: ${width}x${height}"
+    }
+
+    $bmp = New-Object System.Drawing.Bitmap $width, $height
+    $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+    try {
+        $gfx.CopyFromScreen($left, $top, 0, 0, $bmp.Size)
+        $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally {
+        $gfx.Dispose()
+        $bmp.Dispose()
+    }
+}
+
+function Focus-SlideshowWindow {
+    param(
+        [string]$caption,
+        [int]$retryForMs = 1500
+    )
+
+    $swRestore = 9
+    $elapsed = 0
+    $hWnd = [IntPtr]::Zero
+
+    while ($elapsed -lt $retryForMs) {
+        $hWnd = [Win32]::FindWindow($null, $caption)
+        if ($hWnd -ne [IntPtr]::Zero) {
+            [Win32]::ShowWindow($hWnd, $swRestore) | Out-Null
+            [Win32]::SetForegroundWindow($hWnd) | Out-Null
+            return $hWnd
+        }
+        Start-Sleep -Milliseconds 100
+        $elapsed += 100
+    }
+
+    return [IntPtr]::Zero
+}
+
+# --- Validate / prepare ---
+if (-not (Test-Path -LiteralPath $pptxPath)) { throw "File not found: $pptxPath" }
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+$ppt  = $null
+$pres = $null
+
+try {
+    $ppt = New-Object -ComObject PowerPoint.Application
+    $ppt.Visible = $msoTrue
+
+    $pres = $ppt.Presentations.Open($pptxPath, $msoTrue, $msoFalse, $msoTrue)
+
+    $settings = $pres.SlideShowSettings
+    $settings.StartingSlide = 1
+    $settings.EndingSlide   = $pres.Slides.Count
+
+    $settings.Run() | Out-Null
+    Start-Sleep -Milliseconds 800
+
+    # Get slideshow window object (for Left/Top/Width/Height and Next())
+    $ssw = $ppt.SlideShowWindows.Item(1)
+
+    # Try to focus slideshow window using its caption
+    $caption = [string]$ssw.Caption
+    $hWnd = Focus-SlideshowWindow -caption $caption -retryForMs $focusRetryMs
+
+    $total = $pres.Slides.Count
+
+    for ($i = 1; $i -le $total; $i++) {
+        # Ensure slideshow is in front (helps if something steals focus)
+        if ($hWnd -ne [IntPtr]::Zero) {
+            [Win32]::SetForegroundWindow($hWnd) | Out-Null
+        }
+
+        Start-Sleep -Milliseconds $delayMs
+
+        $file = Join-Path $outDir ("slide {0}.png" -f $i)
+
+        Capture-Region ([int]$ssw.Left) ([int]$ssw.Top) ([int]$ssw.Width) ([int]$ssw.Height) $file
+
+        if ($i -lt $total) {
+            $ssw.View.Next()
+        }
+    }
+
+    $ssw.View.Exit()
+}
+finally {
+    try { if ($pres -ne $null) { $pres.Close() | Out-Null } } catch {}
+    try { if ($ppt  -ne $null) { $ppt.Quit()  | Out-Null } } catch {}
+
+    try { if ($pres -ne $null) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($pres) } } catch {}
+    try { if ($ppt  -ne $null) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($ppt) } } catch {}
+
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+}
+
+"Done. Saved screenshots to: $outDir"
