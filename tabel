@@ -1,0 +1,19 @@
+ <table class="table table-bordered">
+   <thead>
+     <tr>
+       <th>Ședința</th>
+       <th>Data</th>
+       <th>Notificare</th>
+       <th>Minută</th>
+     </tr>
+   </thead>
+   <tbody>
+     <tr><td></td><td></td><td></td><td></td></tr>
+     <tr><td></td><td></td><td></td><td></td></tr>
+     <tr><td></td><td></td><td></td><td></td></tr>
+     <tr><td></td><td></td><td></td><td></td></tr>
+     <tr><td></td><td></td><td></td><td></td></tr>
+     <tr><td></td><td></td><td></td><td></td></tr>
+     <tr><td></td><td></td><td></td><td></td></tr>
+   </tbody>
+ </table>
