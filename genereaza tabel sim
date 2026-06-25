@@ -1,0 +1,115 @@
+// Returns the Monday that starts the first FULL work week of the year.
+// If Jan 1 is not a Monday, that partial week is skipped.
+function getFirstFullWeekMonday(year) {
+  const jan1 = new Date(year, 0, 1);
+  const jan1Day = jan1.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+
+  // Days to add to reach the next Monday (0 if Jan 1 IS a Monday)
+  const daysUntilMonday = jan1Day === 1 ? 0 : (jan1Day === 0 ? 1 : 8 - jan1Day);
+
+  return new Date(year, 0, 1 + daysUntilMonday);
+}
+
+function getWorkWeekRange(year, week) {
+  const firstMonday = getFirstFullWeekMonday(year);
+
+  const monday = new Date(firstMonday);
+  monday.setDate(firstMonday.getDate() + (week - 1) * 7);
+
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+
+  const formatDate = d =>
+    `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+
+  return `${formatDate(monday)}-${formatDate(friday)}`;
+}
+
+// Total number of full weeks between the first full Monday and Dec 31
+function getTotalFullWeeks(year) {
+  const firstMonday = getFirstFullWeekMonday(year);
+  const lastDay = new Date(year, 11, 31);
+
+  const diffDays = Math.floor((lastDay - firstMonday) / 86400000) + 1;
+  return Math.ceil(diffDays / 7);
+}
+
+async function genereazaTabelActivitati() {
+  console.log("se ruleaza functia");
+
+  const tbody = document.getElementById("tabel-saptamani-body");
+  console.log("tbody", tbody);
+
+  if (!tbody) return;
+
+  const year = new Date().getFullYear();
+  console.log("year", year);
+
+  const totalSaptamani = getTotalFullWeeks(year);
+  console.log("totalSaptamani", totalSaptamani);
+
+  const saptamani = Array.from({ length: totalSaptamani }, (_, i) => i + 1);
+  console.log("saptamani", saptamani);
+
+  //safe generate weeks and range
+  const safeGetWorkWeekRange = (y, s) => {
+    try {
+      if (typeof getWorkWeekRange === 'function') return getWorkWeekRange(y, s);
+
+    } catch (e) {
+      return `Sapt. ${s}`;
+    }
+  }
+
+  for (let i = 0; i < saptamani.length; i += 4) {
+    console.log("i=", i);
+
+    const tr = document.createElement("tr")
+    console.log("tr", tr);
+
+    for (let j = 0; j < 4; j++) {
+      console.log("k este egal cu", j);
+
+      const sapt = saptamani[i + j];
+      console.log("sapt", sapt);
+
+      if (!sapt) {
+        tr.appendChild(document.createElement("td"));
+        tr.appendChild(document.createElement("td"));
+        continue;
+      }
+      const perioada = safeGetWorkWeekRange(year, sapt);
+      console.log("perioada", perioada);
+
+      const filePath = `activitati_simulator/${year}/activitati_simulator_${sapt}.pdf`;
+      console.log("calea", filePath);
+
+      const tdSapt = document.createElement("td");
+      tdSapt.textContent = `S${sapt}`
+      const tdProg = document.createElement("td");
+      try {
+        console.log(filePath);
+
+        const response = await fetch(filePath, { method: "HEAD" });
+        console.log(response);
+
+        if (response.ok) {
+          const a = document.createElement("a");
+          a.href = filePath;
+          a.textContent = perioada;
+          a.target = "_blank";
+          tdProg.appendChild(a);
+        } else {
+          tdProg.textContent = perioada;
+        }
+      } catch {
+        tdProg.textContent = perioada;
+      }
+      tr.appendChild(tdSapt);
+      tr.appendChild(tdProg);
+    }
+    tbody.appendChild(tr);
+  }
+}
+
+genereazaTabelActivitati();
